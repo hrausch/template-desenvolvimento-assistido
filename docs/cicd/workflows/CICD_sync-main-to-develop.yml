@@ -1,0 +1,58 @@
+name: Sync main into develop
+
+# Runs whenever main is updated (e.g. after a hotfix merge).
+# Opens a PR from main -> develop so the fix doesn't get lost on the next release.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-develop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if develop is behind main
+        id: diff
+        run: |
+          git fetch origin develop
+          DIFF=$(git rev-list origin/develop..origin/main --count)
+          echo "count=$DIFF" >> "$GITHUB_OUTPUT"
+
+      - name: Create sync branch and open PR
+        if: steps.diff.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="sync/main-to-develop-$(date +%Y%m%d%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH" origin/develop
+          git merge origin/main --no-edit
+
+          # If merge produced conflicts, stop here and let a human resolve it in the PR
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            git merge --abort
+            echo "Merge conflict detected. Skipping auto-merge; manual sync required."
+            exit 1
+          fi
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base develop \
+            --head "$BRANCH" \
+            --title "chore: sync main into develop" \
+            --body "Automated sync after a merge to \`main\` (e.g. hotfix). Review and merge to keep \`develop\` up to date."
+
+      - name: Nothing to sync
+        if: steps.diff.outputs.count == '0'
+        run: echo "develop is already up to date with main. No PR needed."

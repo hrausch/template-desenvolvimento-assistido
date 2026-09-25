@@ -1,0 +1,128 @@
+name: CI/CD - Frontend
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bioterio-frontend
+
+jobs:
+  # Runs on every push and PR: builds and tests only, never deploys.
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # Deploys to STAGING - only runs on a push (i.e. merge) to develop.
+  deploy-staging:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # VITE_API_URL is baked into the static bundle at build time, so it must be
+      # a build-arg — the staging and production images cannot be the same artifact.
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:staging-${{ github.sha }}, ${{ env.IMAGE_NAME }}:staging-latest
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+
+      - name: Deploy to staging VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE_NAME
+          script: |
+            docker pull ${{ env.IMAGE_NAME }}:staging-latest
+            docker stop bioterio-frontend-staging || true
+            docker rm bioterio-frontend-staging || true
+            docker run -d \
+              --name bioterio-frontend-staging \
+              --restart unless-stopped \
+              -p 8082:80 \
+              ${{ env.IMAGE_NAME }}:staging-latest
+
+  # Deploys to PRODUCTION - only runs on a push (i.e. merge) to main.
+  deploy-production:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:prod-${{ github.sha }}, ${{ env.IMAGE_NAME }}:prod-latest
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+
+      - name: Deploy to production VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE_NAME
+          script: |
+            docker pull ${{ env.IMAGE_NAME }}:prod-latest
+            docker stop bioterio-frontend-prod || true
+            docker rm bioterio-frontend-prod || true
+            docker run -d \
+              --name bioterio-frontend-prod \
+              --restart unless-stopped \
+              -p 80:80 \
+              ${{ env.IMAGE_NAME }}:prod-latest
