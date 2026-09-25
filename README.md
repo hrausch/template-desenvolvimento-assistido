@@ -1,6 +1,6 @@
-# neurofarmacologia-bioterio
+# TITULO DO PROJETO
 
-Repositório de documentação e protótipo do **Sistema de Gestão de Biotério**: controle de animais de laboratório, procedimentos e rastreabilidade para auditoria do conselho de ética (CEUA/CONCEA).
+Repositório de documentação e protótipo do **Sistema de Gestão de XXXX**: ....
 
 | Pasta | Conteúdo |
 |---|---|
