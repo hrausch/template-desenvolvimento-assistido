@@ -1,17 +1,17 @@
 # Git Workflow & CI/CD Strategy
 
-**Sistema de Gestão de Biotério**
+**Sistema de Gestão de XXXX**
 
 ## Context
 
 O sistema é dividido em dois repositórios independentes (multirepo):
 
-- `bioterio-frontend` — React + TypeScript (ver [`../arquitetura/architecture.md`](../arquitetura/architecture.md))
-- `bioterio-backend` — Spring Boot / Java, com o módulo IAM embarcado (ver [`../arquitetura/IAM.md`](../arquitetura/IAM.md))
+- `xxxx-frontend` — React + TypeScript (ver [`../arquitetura/architecture.md`](../arquitetura/architecture.md))
+- `xxxx-backend` — Spring Boot / Java, com o módulo IAM embarcado (ver [`../arquitetura/IAM.md`](../arquitetura/IAM.md))
 
 Cada repositório tem suas próprias branches, pipeline de CI/CD, versionamento e ambiente de deploy. O modelo de branches abaixo é aplicado **identicamente aos dois repositórios**.
 
-Este repositório (`neurofarmacologia-bioterio`) é o **repositório de docs** do padrão descrito em [`../reference-architecture.md §1`](../reference-architecture.md#1-organização-dos-repositórios): quando `bioterio-backend` e `bioterio-frontend` forem criados, ele deve ser submodulado como `docs/` dentro dos dois. Editar sempre aqui; depois bumpar o ponteiro do submódulo nos repos de código. Cada um dos dois workflows de build+test deve incluir um job que avisa quando esse ponteiro está defasado em relação a este repositório (ver [`reference-architecture.md §5`](../reference-architecture.md#5-cicd-e-operação)) — ainda pendente, adicionar à lista de follow-ups abaixo quando os repos de código forem criados.
+Este repositório é o **repositório de docs** do padrão descrito em [`../reference-architecture.md §1`](../reference-architecture.md#1-organização-dos-repositórios): quando `xxxx-backend` e `xxxx-frontend` forem criados, ele deve ser submodulado como `docs/` dentro dos dois. Editar sempre aqui; depois bumpar o ponteiro do submódulo nos repos de código. Cada um dos dois workflows de build+test deve incluir um job que avisa quando esse ponteiro está defasado em relação a este repositório (ver [`reference-architecture.md §5`](../reference-architecture.md#5-cicd-e-operação)).
 
 > Se você está consultando este documento para ajudar com o fluxo de git/CI do sistema, esta é a fonte de verdade sobre como branches, PRs e deploys devem funcionar. Siga as regras aqui a menos que o usuário informe explicitamente que o processo mudou.
 
@@ -38,25 +38,18 @@ Este repositório (`neurofarmacologia-bioterio`) é o **repositório de docs** d
 ```bash
 git checkout develop
 git pull origin develop
-git checkout -b feature/procedimento-registro-imutavel
+git checkout -b feature/<escopo>-<descricao-curta>
 # work, commit
-git push origin feature/procedimento-registro-imutavel
+git push origin feature/<escopo>-<descricao-curta>
 ```
 
 **Convenção de nomenclatura:** `feature/<escopo>-<descricao-curta>`, com escopo alinhado aos módulos do sistema (ver [`../arquitetura/architecture.md`](../arquitetura/architecture.md)):
 
 | Prefixo de escopo | Módulo |
 |---|---|
-| `feature/animal-*` | Cadastro de animais (RF01) |
-| `feature/caixa-*` | Gestão de caixas/gaiolas (RF02) |
-| `feature/procedimento-*` | Registro de procedimentos (RF03) |
-| `feature/protocolo-*` | Protocolos e projetos de pesquisa (RF04) |
-| `feature/vinculo-*` | Vínculo aluno–pesquisador (RF05) |
-| `feature/relatorio-*` | Relatórios (RF07) |
-| `feature/alerta-*` | Alertas e notificações (RF08) |
-| `feature/auth-*` / `feature/iam-*` | Autenticação e perfis de acesso (RF05) |
-
-Exemplos: `feature/caixa-alerta-superlotacao`, `feature/protocolo-alerta-vencimento`, `feature/vinculo-encerramento`.
+| `feature/<modulo1>-*` | Módulo 1 (RF01) |
+| `feature/<modulo2>-*` | Módulo 2 (RF02) |
+| `feature/auth-*` / `feature/iam-*` | Autenticação e perfis de acesso |
 
 - Abre PR → `develop`
 - CI executa build/lint/test
@@ -77,9 +70,9 @@ Usada apenas quando a produção está quebrada e não pode esperar o ciclo norm
 ```bash
 git checkout main
 git pull origin main
-git checkout -b hotfix/procedimento-validacao-protocolo
+git checkout -b hotfix/<escopo>-<descricao-curta>
 # fix, commit
-git push origin hotfix/procedimento-validacao-protocolo
+git push origin hotfix/<escopo>-<descricao-curta>
 ```
 
 **Convenção de nomenclatura:** `hotfix/<escopo>-<descricao-curta>`, mesmos escopos da tabela de feature branches acima.
@@ -123,7 +116,7 @@ Esta é uma **decisão manual e deliberada** — nunca automática a cada merge 
 ### Quando disparar
 - Cadência de release programada (ex.: quinzenal, ou conforme cronograma acordado com a equipe)
 - Marco de funcionalidade completa atingido e validado em staging
-- Sign-off manual de QA/pesquisador responsável no ambiente de staging
+- Sign-off manual de QA/responsável no ambiente de staging
 
 **Decisão: o sistema não usa branches `release/*`.** Simplicidade: releases vão diretamente de `develop` para `main`.
 
@@ -174,7 +167,7 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 ## Auto-Sync Workflow (`main` → `develop`)
 
 **Plataforma:** GitHub Actions
-**Arquivo:** [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml) (colocar em `.github/workflows/sync-main-to-develop.yml` em ambos os repositórios: `bioterio-frontend` e `bioterio-backend`)
+**Arquivo:** [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml) (colocar em `.github/workflows/sync-main-to-develop.yml` em ambos os repositórios: `xxxx-frontend` e `xxxx-backend`)
 
 **O que faz:**
 1. Dispara a cada push em `main` (cobre merges de hotfix e de release)
@@ -196,8 +189,8 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 ## CI/CD Deploy Workflows (Docker + VPS via SSH)
 
 **Arquivos:**
-- [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) → `.github/workflows/ci-cd.yml` em `bioterio-backend`
-- [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) → `.github/workflows/ci-cd.yml` em `bioterio-frontend`
+- [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) → `.github/workflows/ci-cd.yml` em `xxxx-backend`
+- [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) → `.github/workflows/ci-cd.yml` em `xxxx-frontend`
 
 **Fluxo (ambos os repositórios):**
 1. Todo push/PR → job `build-and-test` (lint, test, build) — sem deploy
@@ -205,8 +198,8 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 3. Push em `main` → job `deploy-production` → mesmo fluxo, com a config do GitHub Environment **production**
 
 **Stack de build por repositório:**
-- **`bioterio-backend`** (Spring Boot / Java 17 / Maven, pacote raiz `br.bioterio`): `mvn -B verify` para lint/test/build ([`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml)), imagem Docker via `Dockerfile` multi-stage (build Maven → runtime JRE).
-- **`bioterio-frontend`** (React / TypeScript / Vite, PWA): `npm ci`, `npm run lint`, `npm test`, `npm run build` ([`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml)).
+- **`xxxx-backend`** (Spring Boot / Java 17 / Maven): `mvn -B verify` para lint/test/build ([`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml)), imagem Docker via `Dockerfile` multi-stage (build Maven → runtime JRE).
+- **`xxxx-frontend`** (React / TypeScript / Vite): `npm ci`, `npm run lint`, `npm test`, `npm run build` ([`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml)).
 
 **Distinção importante — variáveis de ambiente frontend vs backend:**
 - **Backend:** env vars (`DATABASE_URL`, `JWT_SECRET`, etc. — usadas também pelo módulo IAM, ver [`../arquitetura/IAM.md`](../arquitetura/IAM.md)) são passadas em **runtime** do container (`docker run -e ...`) — a mesma imagem pode rodar em qualquer ambiente.
@@ -218,8 +211,8 @@ Em **cada repositório** (Settings → Environments), criar dois ambientes: `sta
 
 | Nome | Tipo | Usado por | Exemplo (staging) | Exemplo (produção) |
 |---|---|---|---|---|
-| `API_URL` | Variable | build-arg do frontend | `https://api-staging.bioterio.exemplo.org` | `https://api.bioterio.exemplo.org` |
-| `FRONTEND_URL` | Variable | backend (config de CORS) | `https://staging.bioterio.exemplo.org` | `https://bioterio.exemplo.org` |
+| `API_URL` | Variable | build-arg do frontend | `https://api-staging.xxxx.exemplo.org` | `https://api.xxxx.exemplo.org` |
+| `FRONTEND_URL` | Variable | backend (config de CORS) | `https://staging.xxxx.exemplo.org` | `https://xxxx.exemplo.org` |
 | `DEPLOY_HOST` | Variable | ambos, destino SSH | IP/hostname da VPS de staging | IP/hostname da VPS de produção |
 | `DEPLOY_USER` | Variable | ambos, usuário SSH | ex.: `deploy` | ex.: `deploy` |
 | `DEPLOY_SSH_KEY` | **Secret** | ambos, chave SSH privada | chave de staging | chave de produção |
@@ -228,7 +221,7 @@ Em **cada repositório** (Settings → Environments), criar dois ambientes: `sta
 
 Regra geral: qualquer coisa sensível (chaves, tokens, credenciais de banco) → **Secret**. Qualquer coisa apenas informativa (uma URL, um hostname) → **Variable**. Ambos são escopados por ambiente, então `staging` e `production` nunca veem os valores um do outro.
 
-> Os domínios `bioterio.exemplo.org` acima são placeholder — o domínio real depende da instituição que vai hospedar o sistema, ainda em aberto (ver pergunta sobre integração institucional em [`../requisitos/requirements.md`](../requisitos/requirements.md)).
+> Os domínios `xxxx.exemplo.org` acima são placeholder — substitua pelo domínio real do projeto.
 
 **Registro de containers:** estes workflows publicam imagens no GitHub Container Registry (`ghcr.io`) usando o `GITHUB_TOKEN` embutido — nenhuma credencial extra de registro necessária.
 
@@ -255,7 +248,7 @@ Como os dois repositórios fazem deploy independentemente mas dependem um do out
 
 - **Versionamento de API:** marcar releases do backend com tag (ex.: `v1.2.0`) para que o frontend possa fixar uma versão conhecida como compatível.
 - **URLs de ambiente:** a build de staging do frontend aponta para o deploy de staging do backend; a build de produção do frontend aponta para o deploy de produção do backend. Gerenciado via env vars/secrets por pipeline (ver tabela de GitHub Environments acima).
-- **Ordem de merge:** quando uma funcionalidade abrange os dois repositórios (ex.: novo endpoint de registro de procedimento + tela correspondente), mesclar o backend primeiro, depois o frontend, para evitar quebrar o contrato durante o deploy.
+- **Ordem de merge:** quando uma funcionalidade abrange os dois repositórios (ex.: novo endpoint + tela correspondente), mesclar o backend primeiro, depois o frontend, para evitar quebrar o contrato durante o deploy.
 
 ---
 
@@ -267,14 +260,13 @@ hotfix/*   ← branched from main     → PR into main → sync back into develo
 develop    → PR into main directly (no release branches)
 ```
 
-## Open Follow-ups
-- [x] Decidir GitHub Actions vs GitLab CI para os dois repositórios — **decidido: GitHub Actions**
-- [x] Escrever workflow de auto-sync (`main → develop` PR após merge de hotfix/release) — ver [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml), adicionar em `.github/workflows/` nos dois repositórios
-- [x] Decidir se branches de release são usadas ou não no sistema — **decidido: sem branches `release/*`, `develop` mescla diretamente em `main`**
-- [x] Definir gerenciamento de env vars/secrets para as URLs de API entre repositórios — ver seção "CI/CD Deploy Workflows" acima, usando GitHub Environments (`staging`/`production`) com Variables e Secrets escopados
-- [x] Adaptar [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) para Java/Maven (Spring Boot) — feito
-- [x] Criar [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) para o frontend (build Vite + build-arg `VITE_API_URL`) — feito
-- [ ] Definir domínio real de staging/produção (placeholder usado: `bioterio.exemplo.org`) — pendente definição institucional (ver pergunta em aberto sobre IFPR em [`../requisitos/requirements.md`](../requisitos/requirements.md))
-- [ ] Criar `Dockerfile` multi-stage do `bioterio-backend` (build Maven → runtime JRE) — pendente
-- [ ] Criar `Dockerfile` multi-stage do `bioterio-frontend` (build Vite → Nginx) — pendente
-- [ ] Submodular este repositório de docs como `docs/` em `bioterio-backend` e `bioterio-frontend`, e adicionar o job de checagem de ponteiro defasado no `build-and-test` dos dois (ver seção "Context" acima) — pendente, depende da criação dos dois repos de código
+## Checklist de setup do projeto
+- [ ] Decidir GitHub Actions vs GitLab CI para os dois repositórios
+- [ ] Adaptar [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml), adicionando em `.github/workflows/` nos dois repositórios
+- [ ] Decidir se branches de release (`release/*`) serão usadas ou não
+- [ ] Definir gerenciamento de env vars/secrets para as URLs de API entre repositórios via GitHub Environments (`staging`/`production`)
+- [ ] Adaptar [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) e [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) ao stack real do projeto, substituindo os placeholders `xxxx-backend`/`xxxx-frontend`
+- [ ] Definir domínio real de staging/produção (placeholder usado: `xxxx.exemplo.org`)
+- [ ] Criar `Dockerfile` multi-stage do backend (build Maven → runtime JRE)
+- [ ] Criar `Dockerfile` multi-stage do frontend (build Vite → Nginx)
+- [ ] Submodular este repositório de docs como `docs/` nos repositórios de backend e frontend, e adicionar o job de checagem de ponteiro defasado no `build-and-test` dos dois (ver seção "Context" acima)

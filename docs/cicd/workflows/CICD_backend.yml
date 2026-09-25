@@ -11,7 +11,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bioterio-backend
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/xxxx-backend
 
 jobs:
   # Runs on every push and PR: builds and tests only, never deploys.
@@ -64,10 +64,10 @@ jobs:
           envs: IMAGE_NAME
           script: |
             docker pull ${{ env.IMAGE_NAME }}:staging-latest
-            docker stop bioterio-backend-staging || true
-            docker rm bioterio-backend-staging || true
+            docker stop xxxx-backend-staging || true
+            docker rm xxxx-backend-staging || true
             docker run -d \
-              --name bioterio-backend-staging \
+              --name xxxx-backend-staging \
               --restart unless-stopped \
               -p 8081:8080 \
               -e SPRING_PROFILES_ACTIVE=staging \
@@ -109,10 +109,10 @@ jobs:
           envs: IMAGE_NAME
           script: |
             docker pull ${{ env.IMAGE_NAME }}:prod-latest
-            docker stop bioterio-backend-prod || true
-            docker rm bioterio-backend-prod || true
+            docker stop xxxx-backend-prod || true
+            docker rm xxxx-backend-prod || true
             docker run -d \
-              --name bioterio-backend-prod \
+              --name xxxx-backend-prod \
               --restart unless-stopped \
               -p 8080:8080 \
               -e SPRING_PROFILES_ACTIVE=production \

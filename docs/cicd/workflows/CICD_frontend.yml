@@ -11,7 +11,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bioterio-frontend
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/xxxx-frontend
 
 jobs:
   # Runs on every push and PR: builds and tests only, never deploys.
@@ -76,10 +76,10 @@ jobs:
           envs: IMAGE_NAME
           script: |
             docker pull ${{ env.IMAGE_NAME }}:staging-latest
-            docker stop bioterio-frontend-staging || true
-            docker rm bioterio-frontend-staging || true
+            docker stop xxxx-frontend-staging || true
+            docker rm xxxx-frontend-staging || true
             docker run -d \
-              --name bioterio-frontend-staging \
+              --name xxxx-frontend-staging \
               --restart unless-stopped \
               -p 8082:80 \
               ${{ env.IMAGE_NAME }}:staging-latest
@@ -119,10 +119,10 @@ jobs:
           envs: IMAGE_NAME
           script: |
             docker pull ${{ env.IMAGE_NAME }}:prod-latest
-            docker stop bioterio-frontend-prod || true
-            docker rm bioterio-frontend-prod || true
+            docker stop xxxx-frontend-prod || true
+            docker rm xxxx-frontend-prod || true
             docker run -d \
-              --name bioterio-frontend-prod \
+              --name xxxx-frontend-prod \
               --restart unless-stopped \
               -p 80:80 \
               ${{ env.IMAGE_NAME }}:prod-latest

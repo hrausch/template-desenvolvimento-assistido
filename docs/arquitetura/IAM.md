@@ -1,6 +1,6 @@
 # IAM Module — Guia de Integração
 
-> Este guia é destinado aos desenvolvedores da API Backend do **Sistema de Gestão de Biotério** que vão **consumir** o módulo IAM como dependência Maven no projeto Spring Boot. O módulo resolve os requisitos de RF05 (Usuários e Perfis de Acesso) e RF06 (Trilha de Auditoria) — ver [`../requisitos/requirements.md`](../requisitos/requirements.md).
+> Este guia é destinado aos desenvolvedores da API Backend do **Sistema de Gestão de XXXX** que vão **consumir** o módulo IAM como dependência Maven no projeto Spring Boot. O módulo resolve os requisitos de usuários/perfis de acesso e trilha de auditoria do projeto — ver [`../requisitos/requirements.md`](../requisitos/requirements.md).
 
 ---
 
@@ -33,12 +33,12 @@ Na classe principal da aplicação:
 
 ```java
 @SpringBootApplication(scanBasePackages = {
-    "br.bioterio",            // pacote do sistema
-    "br.com.cati.iam"         // modulo IAM
+    "<pacote-base-do-projeto>", // pacote do sistema
+    "br.com.cati.iam"           // modulo IAM
 })
-public class BiotereioApplication {
+public class Application {
     public static void main(String[] args) {
-        SpringApplication.run(BiotereioApplication.class, args);
+        SpringApplication.run(Application.class, args);
     }
 }
 ```
@@ -53,7 +53,7 @@ O IAM cria as tabelas automaticamente via JPA. Configure o datasource no `applic
 spring:
   datasource:
     url: jdbc:h2:file:./data/db                       # desenvolvimento
-    # url: jdbc:postgresql://localhost:5432/bioterio   # producao
+    # url: jdbc:postgresql://localhost:5432/xxxx      # producao
 
   jpa:
     hibernate:
@@ -61,13 +61,13 @@ spring:
     show-sql: false
 ```
 
-> O IAM gerencia seu próprio schema (`iam_*`) via `ddl-auto` da biblioteca — independente do Flyway que versiona o schema dos módulos de negócio (animais, caixas, procedimentos, protocolos, vinculos). Ver [`architecture.md — Banco de dados, perfis e migrações`](./architecture.md#banco-de-dados-perfis-e-migrações).
+> O IAM gerencia seu próprio schema (`iam_*`) via `ddl-auto` da biblioteca — independente do Flyway que versiona o schema dos módulos de negócio. Ver [`architecture.md — Banco de dados, perfis e migrações`](./architecture.md#banco-de-dados-perfis-e-migrações).
 
 **Tabelas criadas pelo módulo:**
 
 | Tabela                     | Descricao                                    |
 |---------------------------|----------------------------------------------|
-| `iam_users`               | Usuarios (pesquisador, aluno, veterinário, administrador, auditor CEUA) |
+| `iam_users`               | Usuários do sistema (todos os perfis)        |
 | `iam_opaque_tokens`       | Tokens de autenticacao                       |
 | `iam_confirmation_tokens` | Tokens de confirmacao (reset de senha)       |
 | `iam_roles`               | Roles do RBAC                                |
@@ -107,9 +107,9 @@ Se você não declarar nada, os defaults acima serão usados automaticamente.
 
 ## 4. Fluxos de uso
 
-### 4.1 Criar usuário (Pesquisador, Aluno, Veterinário, Administrador ou Auditor CEUA)
+### 4.1 Criar usuário
 
-O sistema **não tem cadastro público** — toda conta é criada por um Administrador (RF05), então este endpoint deve ficar protegido, não em `permitAll` (ver [`architecture.md`](./architecture.md#autenticação-e-perfis-de-acesso-iam)):
+> Se o projeto não tiver cadastro público, toda conta é criada por um Administrador — este endpoint deve ficar protegido, não em `permitAll` (ver [`architecture.md`](./architecture.md#autenticação-e-perfis-de-acesso-iam)):
 
 ```java
 @RestController
@@ -139,7 +139,7 @@ public class UserController {
 }
 ```
 
-Após criar o usuário, atribua o perfil correspondente (ver seção 5.3): `ROLE_PESQUISADOR`, `ROLE_ALUNO`, `ROLE_VETERINARIO`, `ROLE_ADMINISTRADOR` ou `ROLE_AUDITOR_CEUA`. Se o usuário criado for `ROLE_ALUNO`, o vínculo inicial com um pesquisador é criado separadamente pelo módulo `vinculos` (RF05) — não pelo IAM.
+Após criar o usuário, atribua o perfil correspondente (ver seção 5.2/5.3) usando as roles definidas para o projeto.
 
 **Requisitos de senha:** O módulo valida senhas com a anotação `@IamStrongPassword`. A senha deve ter:
 - Mínimo de 8 caracteres
@@ -222,7 +222,7 @@ UUID userId = principal.id();
 String email = principal.email();
 
 // Verificar permissoes
-if (principal.hasPermission("PROCEDIMENTO_REGISTRAR")) {
+if (principal.hasPermission("RECURSO_CRIAR")) {
     // ...
 }
 
@@ -230,7 +230,7 @@ if (principal.hasRole("ROLE_ADMINISTRADOR")) {
     // ...
 }
 
-if (principal.hasAnyPermission("PROTOCOLO_GERENCIAR", "PROTOCOLO_CONSULTAR")) {
+if (principal.hasAnyPermission("RECURSO_GERENCIAR", "RECURSO_CONSULTAR")) {
     // ...
 }
 
@@ -239,7 +239,7 @@ Optional<Principal> optional = IamContext.getPrincipalOrEmpty();
 boolean autenticado = IamContext.isAuthenticated();
 ```
 
-Para resolver o escopo de dados de um `ROLE_ALUNO` (RF05 — só enxerga o pesquisador ao qual está atualmente vinculado), combine `IamContext` com o `VinculoAtivoResolver` do módulo `vinculos` — ver [`architecture.md — Escopo de dados por vínculo aluno–pesquisador`](./architecture.md#escopo-de-dados-por-vínculo-alunopesquisador). O IAM resolve *quem* está autenticado; o escopo de *quais dados* ele vê é regra de negócio do domínio, fora do IAM.
+Se o projeto tiver uma regra de escopo de dados específica do domínio (ex.: um usuário só enxerga os dados de uma entidade à qual está vinculado), combine `IamContext` com um resolver de domínio próprio do módulo responsável — ver a seção de decisões de arquitetura específicas do domínio em [`architecture.md`](./architecture.md). O IAM resolve *quem* está autenticado; o escopo de *quais dados* ele vê é regra de negócio do domínio, fora do IAM.
 
 ### 4.5 Configurar Spring Security
 
@@ -273,28 +273,22 @@ public class SecurityConfig {
 }
 ```
 
-Note que `/v1/users` **não** está na lista de `permitAll` — diferente de sistemas com cadastro público, aqui a criação de usuário exige `ROLE_ADMINISTRADOR` (ver seção 4.1).
+Se o projeto não tiver cadastro público, `/v1/users` **não** deve estar na lista de `permitAll` — a criação de usuário exige `ROLE_ADMINISTRADOR` (ver seção 4.1).
 
 ### 4.6 Proteger endpoints com permissões
 
 Use `@PreAuthorize` do Spring Security. Exemplos aplicados aos módulos do sistema (ver [`architecture.md`](./architecture.md)):
 
 ```java
-@PostMapping("/procedimentos")
-@PreAuthorize("hasAuthority('PROCEDIMENTO_REGISTRAR')")     // RF03 — Registro de Procedimento
-public ResponseEntity<?> registrarProcedimento(@RequestBody ProcedimentoRequestDTO request) {
+@PostMapping("/<recurso>")
+@PreAuthorize("hasAuthority('RECURSO_CRIAR')")               // RF0X — nome do requisito
+public ResponseEntity<?> criarRecurso(@RequestBody RecursoRequestDTO request) {
     // ...
 }
 
-@GetMapping("/protocolos/{id}")
-@PreAuthorize("hasAuthority('PROTOCOLO_CONSULTAR')")        // RF04 — Consulta de Protocolo
-public ProtocoloResponseDTO consultarProtocolo(@PathVariable UUID id) {
-    // ...
-}
-
-@GetMapping("/relatorios/anual")
-@PreAuthorize("hasAuthority('RELATORIO_GERAR')")            // RF07 — Relatório anual CEUA/CONCEA
-public RelatorioResponseDTO relatorioAnual() {
+@GetMapping("/<recurso>/{id}")
+@PreAuthorize("hasAuthority('RECURSO_CONSULTAR')")           // RF0X — nome do requisito
+public RecursoResponseDTO consultarRecurso(@PathVariable UUID id) {
     // ...
 }
 ```
@@ -380,76 +374,61 @@ public ResponseEntity<?> resetarSenha(@RequestBody ResetarSenhaRequest request) 
 
 - **Role:** perfil do usuário no sistema. Deve começar com `ROLE_`.
 - **Permission:** ação específica sobre um módulo de negócio. Uppercase livre.
-- **Contexto:** um UUID que representaria um escopo (ex.: outra instituição, outro biotério). **O sistema não usa esse recurso** — todas as roles são atribuídas globalmente (contexto `null`). O campo existe na biblioteca mas fica sem uso neste projeto; ver decisão em [`architecture.md`](./architecture.md). O escopo do aluno por vínculo ativo (RF05) é resolvido pelo módulo `vinculos`, não pelo contexto do IAM.
+- **Contexto:** um UUID que representaria um escopo (ex.: outra instituição, outra unidade). Decida se o projeto usa esse recurso ou se todas as roles são atribuídas globalmente (contexto `null`) — registre a decisão em [`architecture.md`](./architecture.md). Se o escopo de dados de um perfil depender de uma regra de domínio (não de um contexto arbitrário), resolva-o no módulo de negócio responsável, não pelo contexto do IAM.
 
-### 5.2 Roles do sistema (RF05)
+### 5.2 Roles do sistema
+
+> Preencha com os perfis definidos nos requisitos ([`../requisitos/requirements.md`](../requisitos/requirements.md)).
 
 | Role | Perfil de negócio |
 |---|---|
-| `ROLE_PESQUISADOR` | Pesquisador responsável por protocolo(s) CEUA |
-| `ROLE_ALUNO` | Aluno vinculado a um pesquisador |
-| `ROLE_VETERINARIO` | Veterinário / responsável técnico do biotério |
 | `ROLE_ADMINISTRADOR` | Administrador do sistema |
-| `ROLE_AUDITOR_CEUA` | Auditor da comissão de ética — acesso de leitura |
+| `ROLE_...` | |
 
 ### 5.3 Permissions por módulo
 
+> Uma permission de escrita e uma de consulta por módulo é um bom ponto de partida; adicione outras conforme a granularidade que o módulo exigir.
+
 | Módulo | Permission | Requisito |
 |---|---|---|
-| Animais | `ANIMAL_CADASTRAR`, `ANIMAL_CONSULTAR` | RF01 |
-| Caixas | `CAIXA_GERENCIAR`, `CAIXA_CONSULTAR` | RF02 |
-| Procedimentos | `PROCEDIMENTO_REGISTRAR`, `PROCEDIMENTO_CONSULTAR` | RF03 |
-| Protocolos | `PROTOCOLO_GERENCIAR`, `PROTOCOLO_CONSULTAR` | RF04 |
-| Vínculos | `VINCULO_CRIAR`, `VINCULO_ENCERRAR`, `VINCULO_CONSULTAR` | RF05 |
-| Relatórios | `RELATORIO_GERAR` | RF07 |
-| Alertas | `ALERTA_CONSULTAR`, `ALERTA_CONFIGURAR` | RF08 |
+| `<modulo1>` | `<MODULO1>_CRIAR`, `<MODULO1>_CONSULTAR` | RF01 |
+| `<modulo2>` | `<MODULO2>_GERENCIAR`, `<MODULO2>_CONSULTAR` | RF02 |
 
 ### 5.4 Permissions sugeridas por role
 
-Mapeamento de negócio (seed inicial) — auditor CEUA nunca recebe uma permission de escrita:
+Mapeamento de negócio (seed inicial) — perfis somente-leitura nunca recebem uma permission de escrita:
 
 | Role | Permissions |
 |---|---|
-| `ROLE_PESQUISADOR` | `ANIMAL_CADASTRAR`, `ANIMAL_CONSULTAR`, `CAIXA_CONSULTAR`, `PROCEDIMENTO_REGISTRAR`, `PROCEDIMENTO_CONSULTAR`, `PROTOCOLO_GERENCIAR`, `PROTOCOLO_CONSULTAR`, `VINCULO_CRIAR`, `VINCULO_ENCERRAR`, `VINCULO_CONSULTAR`, `RELATORIO_GERAR`, `ALERTA_CONSULTAR` |
-| `ROLE_ALUNO` | `ANIMAL_CADASTRAR`, `ANIMAL_CONSULTAR`, `CAIXA_CONSULTAR`, `PROCEDIMENTO_REGISTRAR`, `PROCEDIMENTO_CONSULTAR`, `PROTOCOLO_CONSULTAR`, `ALERTA_CONSULTAR` — todas escopadas ao pesquisador vinculado no momento (ver `architecture.md`) |
-| `ROLE_VETERINARIO` | `ANIMAL_CONSULTAR`, `CAIXA_GERENCIAR`, `CAIXA_CONSULTAR`, `PROCEDIMENTO_REGISTRAR`, `PROCEDIMENTO_CONSULTAR`, `ALERTA_CONSULTAR` — sem escopo por vínculo, acesso técnico a todos os protocolos |
-| `ROLE_ADMINISTRADOR` | Todas as permissions de negócio acima + `VINCULO_CRIAR`/`VINCULO_ENCERRAR` para qualquer par aluno–pesquisador + `ALERTA_CONFIGURAR` + gestão de usuários |
-| `ROLE_AUDITOR_CEUA` | `ANIMAL_CONSULTAR`, `CAIXA_CONSULTAR`, `PROCEDIMENTO_CONSULTAR`, `PROTOCOLO_CONSULTAR`, `VINCULO_CONSULTAR`, `RELATORIO_GERAR`, `ALERTA_CONSULTAR` — somente leitura, inclui a trilha de auditoria (seção 7) |
+| `ROLE_ADMINISTRADOR` | Todas as permissions de negócio + gestão de usuários |
+| `ROLE_...` | |
 
 ### 5.5 Criar roles e permissions (seed inicial)
 
 ```java
 // Criar roles
-createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_PESQUISADOR"));
-createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_ALUNO"));
-createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_VETERINARIO"));
 createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_ADMINISTRADOR"));
-createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_AUDITOR_CEUA"));
+createRoleUseCase.execute(new IamCreateRoleCommand("ROLE_USUARIO"));
 
 // Criar permissions
-createPermissionUseCase.execute(new IamCreatePermissionCommand("ANIMAL_CADASTRAR"));
-createPermissionUseCase.execute(new IamCreatePermissionCommand("PROCEDIMENTO_REGISTRAR"));
-createPermissionUseCase.execute(new IamCreatePermissionCommand("PROCEDIMENTO_CONSULTAR"));
-createPermissionUseCase.execute(new IamCreatePermissionCommand("PROTOCOLO_GERENCIAR"));
+createPermissionUseCase.execute(new IamCreatePermissionCommand("RECURSO_CRIAR"));
+createPermissionUseCase.execute(new IamCreatePermissionCommand("RECURSO_CONSULTAR"));
 
 // Vincular permissions a role
 assignPermissionToRoleUseCase.execute(
-    new IamAssignPermissionToRoleCommand("ROLE_PESQUISADOR", "PROTOCOLO_GERENCIAR")
+    new IamAssignPermissionToRoleCommand("ROLE_USUARIO", "RECURSO_CRIAR")
 );
 assignPermissionToRoleUseCase.execute(
-    new IamAssignPermissionToRoleCommand("ROLE_ALUNO", "PROCEDIMENTO_REGISTRAR")
-);
-assignPermissionToRoleUseCase.execute(
-    new IamAssignPermissionToRoleCommand("ROLE_AUDITOR_CEUA", "PROTOCOLO_CONSULTAR")
+    new IamAssignPermissionToRoleCommand("ROLE_ADMINISTRADOR", "RECURSO_CONSULTAR")
 );
 ```
 
 ### 5.6 Atribuir roles a usuários
 
 ```java
-// Role global (o sistema sempre atribui sem contexto)
+// Role global (sem contexto) ou escopada, dependendo da decisão em 5.1
 assignRoleToUserUseCase.execute(
-    new IamAssignRoleCommand(userId, "ROLE_PESQUISADOR", null)
+    new IamAssignRoleCommand(userId, "ROLE_USUARIO", null)
 );
 ```
 
@@ -458,12 +437,12 @@ assignRoleToUserUseCase.execute(
 ```java
 // Revogar role de usuario
 revokeRoleFromUserUseCase.execute(
-    new IamRevokeRoleCommand(userId, "ROLE_ALUNO", null)
+    new IamRevokeRoleCommand(userId, "ROLE_USUARIO", null)
 );
 
 // Revogar permission de role
 revokePermissionFromRoleUseCase.execute(
-    new IamRevokePermissionFromRoleCommand("ROLE_ALUNO", "PROCEDIMENTO_REGISTRAR")
+    new IamRevokePermissionFromRoleCommand("ROLE_USUARIO", "RECURSO_CRIAR")
 );
 ```
 
@@ -526,7 +505,7 @@ public class IamExceptionHandler {
 
 O módulo registra automaticamente eventos de segurança na tabela `iam_audit_log`. Você não precisa fazer nada — é automático e assíncrono.
 
-> **Ponto em aberto:** RNF05 exige que todo dado relevante para a CEUA seja rastreável até o usuário e o momento exato do registro. Ainda não decidido se o registro do log de auditoria precisa bloquear/reverter a operação original em caso de falha — uma garantia síncrona que o comportamento assíncrono descrito acima não oferece hoje.
+> **Ponto em aberto:** se o projeto tiver um requisito de auditabilidade estrita (todo dado sensível rastreável até o usuário e o momento exato do registro), decida se o registro do log de auditoria precisa bloquear/reverter a operação original em caso de falha — uma garantia síncrona que o comportamento assíncrono descrito acima não oferece hoje.
 
 Eventos registrados automaticamente:
 - Login sucesso/falha
@@ -537,23 +516,23 @@ Eventos registrados automaticamente:
 - Roles atribuídas/revogadas
 - Permissions atribuídas/revogadas
 
-Para registrar eventos customizados de negócio do sistema (ex.: registro de procedimento, encerramento de vínculo), use o `IamRegisterAuditEventUseCase`:
+Para registrar eventos customizados de negócio do sistema, use o `IamRegisterAuditEventUseCase`:
 
 ```java
 @RequiredArgsConstructor
-public class ProcedimentoUseCase {
+public class RecursoUseCase {
     private final IamRegisterAuditEventUseCase registerAuditUseCase;
 
-    public void registrar(UUID animalId, String tipoProcedimento) {
-        // ... logica de registro do procedimento (RF03) ...
+    public void criar(UUID recursoId, String detalhe) {
+        // ... logica de negócio do use case ...
 
         var principal = IamContext.getPrincipal();
         registerAuditUseCase.execute(
-            "PROCEDIMENTO_REGISTRADO",
+            "RECURSO_CRIADO",
             principal.id(),
             IpAddressUtil.extractIpAddress(),
             null,
-            "Procedimento '" + tipoProcedimento + "' registrado para o animal #" + animalId
+            "Recurso #" + recursoId + " criado: " + detalhe
         );
     }
 }
@@ -605,7 +584,7 @@ public class SeuUseCase {
     private final IamRevokePermissionFromRoleUseCase revokePermissionFromRoleUseCase;
     private final IamAssignRoleToUserUseCase assignRoleToUserUseCase;
     private final IamRevokeRoleFromUserUseCase revokeRoleFromUserUseCase;
-    private final IamRegisterAuditEventUseCase registerAuditUseCase; // eventos customizados (ex.: procedimento, vínculo)
+    private final IamRegisterAuditEventUseCase registerAuditUseCase; // eventos customizados de negócio
 }
 ```
 
@@ -620,11 +599,11 @@ public class SeuUseCase {
 - [ ] Criar endpoints de auth (login, logout) chamando os use cases
 - [ ] Criar endpoint de criação de usuário (`ROLE_ADMINISTRADOR` apenas) chamando `IamCreateIamUserUseCase`
 - [ ] Implementar fluxo de reset de senha (gerar token + enviar email + resetar)
-- [ ] Criar roles (`ROLE_PESQUISADOR`, `ROLE_ALUNO`, `ROLE_VETERINARIO`, `ROLE_ADMINISTRADOR`, `ROLE_AUDITOR_CEUA`) e permissions dos módulos do sistema (seed no startup ou migration)
+- [ ] Criar as roles e permissions dos módulos do sistema (seed no startup ou migration)
 - [ ] Configurar `@ControllerAdvice` para tratar exceptions do IAM
-- [ ] Usar `@PreAuthorize` para proteger endpoints por permissão (RF05)
-- [ ] Implementar o `VinculoAtivoResolver` do módulo `vinculos` e aplicá-lo nos use cases que atendem `ROLE_ALUNO`
-- [ ] Registrar eventos de auditoria customizados nos fluxos de procedimento e vínculo (RF06)
+- [ ] Usar `@PreAuthorize` para proteger endpoints por permissão
+- [ ] Implementar eventuais resolvers de escopo de dados específicos do domínio e aplicá-los nos use cases relevantes
+- [ ] Registrar eventos de auditoria customizados nos fluxos de negócio críticos
 - [ ] (Opcional) Sobrescrever configs default no `application.yml`
 
 ---
@@ -653,7 +632,7 @@ WHERE email = 'usuario@email.com';
 
 ### RBAC não funciona
 
-1. Verifique se as roles começam com `ROLE_` (`ROLE_PESQUISADOR`, `ROLE_ALUNO`, `ROLE_VETERINARIO`, `ROLE_ADMINISTRADOR`, `ROLE_AUDITOR_CEUA`)
+1. Verifique se as roles começam com `ROLE_`
 2. Verifique se o usuário tem a role atribuída (tabela `iam_user_context_roles`)
 3. Verifique se a permission está vinculada à role (tabela `iam_role_permissions`)
 

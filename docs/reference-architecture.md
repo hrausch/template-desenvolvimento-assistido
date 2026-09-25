@@ -166,8 +166,8 @@ src/
 - Feature importa de outra feature **apenas via `index.ts`**.
 - `pages/` não contém regra de negócio; `services/` não contém JSX.
 - **Limite de tamanho: componente com mais de ~250 linhas ou mais de um papel
-  (lista + modal + formulário) é dividido.** Esta é a lição mais cara do
-  SATAC — sem o limite, cada feature vira um `Manager` de 900 linhas.
+  (lista + modal + formulário) é dividido.** Sem esse limite, cada feature
+  tende a virar um `Manager` de 900 linhas.
 
 ### 3.2 Cliente HTTP e sessão
 
@@ -279,4 +279,4 @@ Um único `apiClient` (axios) em `shared/services/` com:
    Vitest configurado com 1 teste de exemplo.
 5. CI dos três fluxos (build+test, docker, sync de branches) desde o commit
    inicial.
-6. `CLAUDE.md` por repo, partindo dos do SATAC como template.
+6. `CLAUDE.md` por repo, com as convenções específicas da stack daquele repo.
