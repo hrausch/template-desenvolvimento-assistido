@@ -11,7 +11,9 @@ O sistema é dividido em dois repositórios independentes (multirepo):
 
 Cada repositório tem suas próprias branches, pipeline de CI/CD, versionamento e ambiente de deploy. O modelo de branches abaixo é aplicado **identicamente aos dois repositórios**.
 
-Este repositório é o **repositório de docs** do padrão descrito em [`../reference-architecture.md §1`](../reference-architecture.md#1-organização-dos-repositórios): quando `xxxx-backend` e `xxxx-frontend` forem criados, ele deve ser submodulado como `docs/` dentro dos dois. Editar sempre aqui; depois bumpar o ponteiro do submódulo nos repos de código. Cada um dos dois workflows de build+test deve incluir um job que avisa quando esse ponteiro está defasado em relação a este repositório (ver [`reference-architecture.md §5`](../reference-architecture.md#5-cicd-e-operação)).
+Este repositório é o **repositório de docs** do padrão descrito em [`../reference-architecture.md §1`](../reference-architecture.md#1-organização-dos-repositórios): `xxxx-backend` e `xxxx-frontend` são seus **irmãos**, lado a lado. **Não é submódulo deles** — de dentro do backend, esta documentação é `../xxxx/docs/`. Editar sempre aqui, e nada no build depende dela.
+
+O submódulo foi descartado de propósito: o ponteiro atrasa sozinho, e uma cópia defasada da arquitetura é pior que nenhuma. Em troca, cada repo de código precisa de `permissions.additionalDirectories` apontando para este repositório, para que os agentes de [`../agentes/`](../agentes/) leiam a documentação sem travar em prompt de permissão.
 
 > Se você está consultando este documento para ajudar com o fluxo de git/CI do sistema, esta é a fonte de verdade sobre como branches, PRs e deploys devem funcionar. Siga as regras aqui a menos que o usuário informe explicitamente que o processo mudou.
 
@@ -269,4 +271,4 @@ develop    → PR into main directly (no release branches)
 - [ ] Definir domínio real de staging/produção (placeholder usado: `xxxx.exemplo.org`)
 - [ ] Criar `Dockerfile` multi-stage do backend (build Maven → runtime JRE)
 - [ ] Criar `Dockerfile` multi-stage do frontend (build Vite → Nginx)
-- [ ] Submodular este repositório de docs como `docs/` nos repositórios de backend e frontend, e adicionar o job de checagem de ponteiro defasado no `build-and-test` dos dois (ver seção "Context" acima)
+- [ ] Registrar `permissions.additionalDirectories` em `.claude/settings.local.json` dos repos de backend e frontend, apontando para este repositório, e instalar os agentes de [`../agentes/`](../agentes/) (ver seção "Context" acima)

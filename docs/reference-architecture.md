@@ -12,9 +12,20 @@ projeto/
 └── <nome>-frontend   ← React + TypeScript
 ```
 
-- O repo de **docs é submodulado como `docs/`** dentro dos repos de código.
-  Editar sempre no repo de docs; depois bumpar o ponteiro do submódulo nos
-  repos de código.
+- Os três repos são **irmãos**, lado a lado. O repo de docs **não é submódulo**
+  dos repos de código: de dentro do backend, a documentação é
+  `../<nome>/docs/`. Editar sempre no repo de docs.
+- **Por que não submódulo.** O ponteiro atrasa sozinho — é preciso lembrar de
+  bumpá-lo em dois repos a cada alteração —, e uma cópia defasada da
+  arquitetura é pior que nenhuma: quem a lê acerta a sintaxe e erra a regra,
+  sem nada ficar vermelho. O benefício ("quem clona o código recebe a
+  documentação") é de equipe grande; o custo é um job de CI só para avisar
+  quando o esquecimento aconteceu. Uma cópia só, sempre a atual.
+- **O preço de não ter submódulo é uma linha de configuração:** as ferramentas
+  de arquivo só leem sem prompt dentro do diretório de trabalho, então cada
+  repo de código precisa de `permissions.additionalDirectories` apontando para
+  o repo de docs — senão um subagente trava esperando aprovação. Ver
+  [`agentes/README.md §5`](agentes/README.md).
 - Cada repo tem seu `CLAUDE.md`/`README` com as convenções da stack; o repo de
   docs tem o `CLAUDE.md` fullstack que explica a relação entre os três.
 - **`openapi/openapi.yaml` é o contrato** — request/response nascem nele.
@@ -29,7 +40,9 @@ projeto/
 | `documents/use-cases.md` | fluxos, pré-condições, regras |
 | `documents/architecture.md` | decisões de arquitetura e seus porquês |
 | `documents/models/Database_ER.mmd` | modelo ER (Mermaid) |
-| `documents/test-planning.md` / `test-cases.md` | estratégia e cenários |
+| `plano-de-testes/README.md` | estratégia de teste (duas camadas) |
+| `plano-desenvolvimento.md` | o que construir, em que ordem, e por qual agente |
+| `agentes/` | os agentes de desenvolvimento e o porquê do roster |
 | `openapi/openapi.yaml` | contrato da API |
 
 ---
@@ -131,14 +144,28 @@ Regras que sustentam essa estrutura:
 
 ### 2.6 Testes
 
+**Duas camadas, não quatro** — detalhe e justificativa de cada corte em
+[`plano-de-testes/README.md`](plano-de-testes/README.md).
+
 - **Integração como espinha dorsal**: `BaseIntegrationTest` com
   `@SpringBootTest + @AutoConfigureMockMvc + @ActiveProfiles("test") +
-  @Transactional`, e helpers de alto nível (`createConfirmedUserAndGetToken`,
-  `performWithToken`).
-- Unitário para `domain/` e lógica de entidade; integração para o fluxo
-  controller→banco. Nomenclatura: `should_x_when_y` (unit) e
-  `@DisplayName("TC-X.Y: …")` amarrando ao caso de teste documentado.
-- JaCoCo no build com gate sobre `usecase/` e `domain/` (DTOs e config fora).
+  @Transactional`, e helpers de alto nível (criar usuário autenticado, criar
+  usuário com contexto, request com token e com contexto). É esse arquivo que
+  decide se os próximos N testes são baratos.
+- Unitário para a lógica de entidade (Rich Entity); integração para o fluxo
+  controller→banco. Nomenclatura: `should_x_when_y`.
+- **Obrigatório por feature com recurso contextual: o teste de isolamento** —
+  usuário do contexto A recebe 404 no recurso do contexto B.
+- **Em teste de cálculo, o esperado é literal conferido à mão**, nunca
+  calculado com a mesma expressão do código. Agregação se testa pela
+  decomposição, não pelo total.
+- **Sem gate de cobertura.** O relatório pode ser gerado para consulta, mas não
+  quebra o build: gate de porcentagem produz teste escrito para o número.
+- **Sem camada intermediária com Mockito, sem Testcontainers e sem matriz de
+  rastreabilidade** (`TC-X.Y`). Os três custam manutenção sem pegar bug — a
+  primeira testa o mesmo que a integração, a segunda só se paga quando um fluxo
+  precisar do PostgreSQL de verdade, e a terceira cobra um commit por teste
+  escrito.
 
 ---
 
@@ -248,8 +275,6 @@ Um único `apiClient` (axios) em `shared/services/` com:
 - Cada repo de código: workflow de **build + test** (PR) e **build + publish
   de imagem Docker** (main/tag). Backend roda `./mvnw test`; frontend roda
   `npm run lint && npm run build && npm test`.
-- Job que avisa quando o ponteiro do submódulo `docs/` está defasado em
-  relação ao repo de docs.
 - Deploy: containers com healthcheck no `/actuator/health`; frontend servido
   por nginx com proxy `/v1` para a API (mesma origem ⇒ sem CORS).
 - Variáveis de ambiente de cada serviço documentadas no README de deploy.
@@ -268,7 +293,7 @@ Um único `apiClient` (axios) em `shared/services/` com:
 
 ## 7. Checklist para iniciar um projeto novo
 
-1. Criar os três repos; submodular docs nos repos de código.
+1. Criar os três repos, irmãos. **Não submodular docs** (ver §1).
 2. Docs: `requirements.md`, `use-cases.md`, `architecture.md`, ER,
    `openapi.yaml` esqueleto.
 3. Backend: skeleton com `config/`, `shared/exception/` (handler + Problem
@@ -280,3 +305,9 @@ Um único `apiClient` (axios) em `shared/services/` com:
 5. CI dos três fluxos (build+test, docker, sync de branches) desde o commit
    inicial.
 6. `CLAUDE.md` por repo, com as convenções específicas da stack daquele repo.
+7. **Sistema de agentes:** instalar os agentes de [`agentes/`](agentes/) nos
+   repos de código e registrar `permissions.additionalDirectories` apontando
+   para o repo de docs, senão os agentes não leem a documentação.
+8. **`plano-desenvolvimento.md`:** as fases, com o agente e o critério de pronto
+   em cada passo. É ele que serve de briefing aos agentes — um agente novo
+   começa sem contexto nenhum, e o plano é o que o substitui.

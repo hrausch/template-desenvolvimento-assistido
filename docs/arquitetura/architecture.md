@@ -92,10 +92,15 @@ Toda a API responde erros no mesmo formato — **RFC 9457 Problem Details** (`Pr
 
 ### Testes
 
-- **Integração como espinha dorsal**: `BaseIntegrationTest` com `@SpringBootTest + @AutoConfigureMockMvc + @ActiveProfiles("test") + @Transactional`, com helpers de alto nível (ex.: `createUserAndGetToken`, `performWithToken`) para não repetir o setup de autenticação em cada teste.
-- Teste unitário para `domain/` e lógica de entidade (Rich Entity); teste de integração para o fluxo controller → banco por caso de uso.
-- Nomenclatura: `should_x_when_y` nos testes unitários; `@DisplayName("TC-X.Y: …")` amarrando ao caso de teste documentado em [`../plano-de-testes/`](../plano-de-testes/).
-- JaCoCo no build com gate de cobertura sobre `usecase/` e `domain/` — DTOs e classes de configuração ficam fora do gate.
+**Duas camadas** — entidade e fluxo HTTP. A estratégia completa, com a justificativa de cada corte, está em [`../plano-de-testes/README.md`](../plano-de-testes/README.md).
+
+- **Integração como espinha dorsal**: `BaseIntegrationTest` com `@SpringBootTest + @AutoConfigureMockMvc + @ActiveProfiles("test") + @Transactional`, com helpers de alto nível (criar usuário autenticado, criar usuário com contexto, request com token e com contexto) para não repetir o setup em cada teste.
+- Teste unitário para a lógica de entidade (Rich Entity); teste de integração para o fluxo controller → banco por caso de uso.
+- **Obrigatório em toda feature com recurso contextual: o teste de isolamento** — usuário do contexto A recebe 404 no recurso do contexto B. Sem ele a regressão vaza dado de outro cliente sem fazer barulho.
+- **Regra de cálculo tem teste próprio**, com o valor esperado como literal conferido à mão — nunca calculado com a mesma expressão do código.
+- Nomenclatura: `should_x_when_y`. **Sem `TC-X.Y` e sem matriz de rastreabilidade:** amarrar cada teste a uma tabela em outro documento custa um commit por teste escrito e não pega bug nenhum.
+- **Sem gate de cobertura.** O relatório pode ser gerado para consulta (`./mvnw verify`), mas não quebra o build — gate de porcentagem produz teste escrito para o número.
+- **Sem camada intermediária com Mockito e sem Testcontainers.** A primeira testa, no CRUD, a mesma coisa que o teste de integração, com o dobro da manutenção; a segunda só se paga quando um fluxo precisar de comportamento específico do PostgreSQL.
 
 ### Backend
 
