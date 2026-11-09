@@ -2,12 +2,6 @@
 
 **Sistema de Gestão de XXXX**
 
-> Este documento segue o padrão fullstack descrito em
-> [`../reference-architecture.md`](../reference-architecture.md) (arquitetura de
-> referência do time). Onde o sistema diverge do padrão, a
-> divergência e o motivo devem ficar explícitos no texto — o restante deve ser lido
-> como aplicação direta do padrão de referência.
-
 ## Containers
 
 As unidades de implantação do sistema: quais processos rodam, quais tecnologias utilizam e como se comunicam entre si.
@@ -247,7 +241,7 @@ Um único `apiClient` (axios) em `shared/services/` (ou `shared/api/`) com:
 
 ## Contrato de API (OpenAPI)
 
-- `openapi.yaml` é escrito **antes** do código das features novas — request/response nascem no contrato, não no controller. Deve ser criado seguindo o checklist do [`reference-architecture.md §7`](../reference-architecture.md#7-checklist-para-iniciar-um-projeto-novo) quando o backend for iniciado.
+- `openapi.yaml` é escrito **antes** do código das features novas — request/response nascem no contrato, não no controller.
 - O backend expõe `springdoc-openapi`; a divergência entre o spec efetivo e o `openapi.yaml` versionado é verificada no CI (ou em checklist de release).
 - Types do frontend gerados a partir do contrato com `openapi-typescript`, eliminando a triplicação spec × DTO Java × `*.types.ts` mantidos manualmente.
 - Convenções fixas do contrato do sistema:

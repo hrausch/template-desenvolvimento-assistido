@@ -7,7 +7,7 @@
 ## 1. Pré-requisitos
 
 - Java 17+
-- Spring Boot 3.2.4+
+- Spring Boot 4.1.1+
 - Banco de dados relacional (H2 para desenvolvimento, PostgreSQL para produção — ver [`architecture.md`](./architecture.md))
 - Maven
 

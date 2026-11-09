@@ -4,14 +4,9 @@
 
 ## Context
 
-O sistema é dividido em dois repositórios independentes (multirepo):
+O sistema é um **monorepo**: um único repositório Git contendo `backend/` (ver [`../arquitetura/architecture.md`](../arquitetura/architecture.md)) e `frontend/` (idem) como pastas-irmãs, mais `docs/` com a documentação do projeto.
 
-- `xxxx-frontend` — React + TypeScript (ver [`../arquitetura/architecture.md`](../arquitetura/architecture.md))
-- `xxxx-backend` — Spring Boot / Java, com o módulo IAM embarcado (ver [`../arquitetura/IAM.md`](../arquitetura/IAM.md))
-
-Cada repositório tem suas próprias branches, pipeline de CI/CD, versionamento e ambiente de deploy. O modelo de branches abaixo é aplicado **identicamente aos dois repositórios**.
-
-Este repositório é o **repositório de docs** do padrão descrito em [`../reference-architecture.md §1`](../reference-architecture.md#1-organização-dos-repositórios): quando `xxxx-backend` e `xxxx-frontend` forem criados, ele deve ser submodulado como `docs/` dentro dos dois. Editar sempre aqui; depois bumpar o ponteiro do submódulo nos repos de código. Cada um dos dois workflows de build+test deve incluir um job que avisa quando esse ponteiro está defasado em relação a este repositório (ver [`reference-architecture.md §5`](../reference-architecture.md#5-cicd-e-operação)).
+Há um único modelo de branches, uma única pipeline de CI/CD (com jobs segmentados por pasta via `paths:`) e um único versionamento (tags no repositório). Backend e frontend fazem deploy de forma independente dentro da mesma pipeline — um push que só altera `frontend/` não deve disparar o job de build do backend, e vice-versa.
 
 > Se você está consultando este documento para ajudar com o fluxo de git/CI do sistema, esta é a fonte de verdade sobre como branches, PRs e deploys devem funcionar. Siga as regras aqui a menos que o usuário informe explicitamente que o processo mudou.
 
@@ -52,9 +47,9 @@ git push origin feature/<escopo>-<descricao-curta>
 | `feature/auth-*` / `feature/iam-*` | Autenticação e perfis de acesso |
 
 - Abre PR → `develop`
-- CI executa build/lint/test
+- CI executa build/lint/test (apenas dos componentes afetados, via `paths:` — ver seção de workflows abaixo)
 - Revisão obrigatória antes do merge
-- Merge dispara deploy automático em staging
+- Merge dispara deploy automático em staging (apenas do(s) componente(s) alterado(s))
 
 Feature branches nunca são direcionadas diretamente para `main`.
 
@@ -135,7 +130,7 @@ git pull origin main
 
 ---
 
-## Branch Protection Rules (`main` + `develop`, ambos os repositórios)
+## Branch Protection Rules (`main` + `develop`)
 
 - Exigir PR + no mínimo 1 revisão
 - Exigir que os checks de CI passem (build, lint, test)
@@ -167,7 +162,7 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 ## Auto-Sync Workflow (`main` → `develop`)
 
 **Plataforma:** GitHub Actions
-**Arquivo:** [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml) (colocar em `.github/workflows/sync-main-to-develop.yml` em ambos os repositórios: `xxxx-frontend` e `xxxx-backend`)
+**Arquivo:** [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml) (colocar em `.github/workflows/sync-main-to-develop.yml` neste repositório)
 
 **O que faz:**
 1. Dispara a cada push em `main` (cobre merges de hotfix e de release)
@@ -180,7 +175,7 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 **Por que um PR em vez de push direto em `develop`:** mantém a regra de proteção de branch ("exigir PR + revisão") consistente, e dá a um humano a chance de revisar antes de mesclar.
 
 **Setup necessário:**
-- Adicionar o arquivo de workflow nos dois repositórios
+- Adicionar o arquivo de workflow no repositório
 - Nenhum secret extra necessário — usa o `GITHUB_TOKEN` embutido
 - Garantir que a configuração do repositório **"Allow GitHub Actions to create and approve pull requests"** esteja habilitada (Settings → Actions → General), caso contrário `gh pr create` falhará com erro de permissão
 
@@ -188,18 +183,33 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 
 ## CI/CD Deploy Workflows (Docker + VPS via SSH)
 
-**Arquivos:**
-- [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) → `.github/workflows/ci-cd.yml` em `xxxx-backend`
-- [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) → `.github/workflows/ci-cd.yml` em `xxxx-frontend`
+**Arquivo:** [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) e [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) → `.github/workflows/ci-cd-backend.yml` e `.github/workflows/ci-cd-frontend.yml` neste repositório.
 
-**Fluxo (ambos os repositórios):**
-1. Todo push/PR → job `build-and-test` (lint, test, build) — sem deploy
+Como é um monorepo, **cada workflow é filtrado por `paths:`** para só disparar quando a pasta correspondente é alterada:
+
+```yaml
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-cd-backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+```
+(análogo para o frontend, filtrando `frontend/**`.) Isso evita que uma mudança isolada no frontend dispare um build/deploy inútil do backend, e vice-versa.
+
+**Fluxo (cada workflow, no seu componente):**
+1. Todo push/PR que toque a pasta correspondente → job `build-and-test` (lint, test, build) — sem deploy
 2. Push em `develop` → job `deploy-staging` → constrói imagem Docker, publica no GHCR, conecta via SSH na VPS, sobe o container com a config do GitHub Environment **staging**
 3. Push em `main` → job `deploy-production` → mesmo fluxo, com a config do GitHub Environment **production**
 
-**Stack de build por repositório:**
-- **`xxxx-backend`** (Spring Boot / Java 17 / Maven): `mvn -B verify` para lint/test/build ([`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml)), imagem Docker via `Dockerfile` multi-stage (build Maven → runtime JRE).
-- **`xxxx-frontend`** (React / TypeScript / Vite): `npm ci`, `npm run lint`, `npm test`, `npm run build` ([`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml)).
+Cada job usa `working-directory: backend` ou `working-directory: frontend` (ou `defaults.run.working-directory` no workflow), e a build Docker usa `context: ./backend` / `context: ./frontend` com o `Dockerfile` de cada pasta.
+
+**Stack de build por componente:**
+- **Backend** (Spring Boot / Java 17 / Maven, em `backend/`): `mvn -B verify` para lint/test/build ([`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml)), imagem Docker via `Dockerfile` multi-stage (build Maven → runtime JRE).
+- **Frontend** (React / TypeScript / Vite, em `frontend/`): `npm ci`, `npm run lint`, `npm test`, `npm run build` ([`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml)).
 
 **Distinção importante — variáveis de ambiente frontend vs backend:**
 - **Backend:** env vars (`DATABASE_URL`, `JWT_SECRET`, etc. — usadas também pelo módulo IAM, ver [`../arquitetura/IAM.md`](../arquitetura/IAM.md)) são passadas em **runtime** do container (`docker run -e ...`) — a mesma imagem pode rodar em qualquer ambiente.
@@ -207,7 +217,7 @@ Branches **não são excluídas automaticamente** por padrão — isso deve ser 
 
 ### Setup necessário — GitHub Environments
 
-Em **cada repositório** (Settings → Environments), criar dois ambientes: `staging` e `production`. Popular cada um com:
+Neste repositório (Settings → Environments), criar dois ambientes: `staging` e `production`. Popular cada um com:
 
 | Nome | Tipo | Usado por | Exemplo (staging) | Exemplo (produção) |
 |---|---|---|---|---|
@@ -235,20 +245,20 @@ Regra geral: qualquer coisa sensível (chaves, tokens, credenciais de banco) →
 
 | Branch | Trigger | Action |
 |---|---|---|
-| `main` | on merge | build → test → deploy para **produção** |
-| `develop` | on merge | build → test → deploy para **staging** |
-| `feature/*` | on push | build → test apenas |
-| `hotfix/*` | on push | build → test apenas, PR fast-track para `main` |
+| `main` | on merge (por componente alterado) | build → test → deploy para **produção** |
+| `develop` | on merge (por componente alterado) | build → test → deploy para **staging** |
+| `feature/*` | on push (por componente alterado) | build → test apenas |
+| `hotfix/*` | on push (por componente alterado) | build → test apenas, PR fast-track para `main` |
 
 ---
 
-## Cross-Repo Coordination (frontend ⇄ backend)
+## Coordenação Backend ⇄ Frontend (dentro do monorepo)
 
-Como os dois repositórios fazem deploy independentemente mas dependem um do outro:
+Como backend e frontend vivem no mesmo repositório mas fazem deploy de forma independente (cada um só quando sua pasta muda):
 
-- **Versionamento de API:** marcar releases do backend com tag (ex.: `v1.2.0`) para que o frontend possa fixar uma versão conhecida como compatível.
+- **Compatibilidade de contrato:** um PR que muda `openapi.yaml`/contrato de API e exige mudança correspondente no frontend deve incluir as duas alterações no mesmo PR sempre que possível — o monorepo existe justamente para permitir isso, evitando o problema de versionamento cruzado do modelo multirepo.
 - **URLs de ambiente:** a build de staging do frontend aponta para o deploy de staging do backend; a build de produção do frontend aponta para o deploy de produção do backend. Gerenciado via env vars/secrets por pipeline (ver tabela de GitHub Environments acima).
-- **Ordem de merge:** quando uma funcionalidade abrange os dois repositórios (ex.: novo endpoint + tela correspondente), mesclar o backend primeiro, depois o frontend, para evitar quebrar o contrato durante o deploy.
+- **Ordem de deploy:** quando um PR altera backend e frontend juntos, o job de deploy do backend deve concluir antes do job de deploy do frontend (dependência explícita entre jobs no workflow, ou merge em duas etapas), para evitar que o frontend novo chame um endpoint que o backend ainda não expõe.
 
 ---
 
@@ -261,12 +271,12 @@ develop    → PR into main directly (no release branches)
 ```
 
 ## Checklist de setup do projeto
-- [ ] Decidir GitHub Actions vs GitLab CI para os dois repositórios
-- [ ] Adaptar [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml), adicionando em `.github/workflows/` nos dois repositórios
+- [ ] Decidir GitHub Actions vs GitLab CI
+- [ ] Adaptar [`workflows/CICD_sync-main-to-develop.yml`](./workflows/CICD_sync-main-to-develop.yml), adicionando em `.github/workflows/`
 - [ ] Decidir se branches de release (`release/*`) serão usadas ou não
-- [ ] Definir gerenciamento de env vars/secrets para as URLs de API entre repositórios via GitHub Environments (`staging`/`production`)
-- [ ] Adaptar [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) e [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) ao stack real do projeto, substituindo os placeholders `xxxx-backend`/`xxxx-frontend`
+- [ ] Definir gerenciamento de env vars/secrets para as URLs de API via GitHub Environments (`staging`/`production`)
+- [ ] Adaptar [`workflows/CICD_backend.yml`](./workflows/CICD_backend.yml) e [`workflows/CICD_frontend.yml`](./workflows/CICD_frontend.yml) ao stack real do projeto, confirmando os filtros `paths:` (`backend/**`, `frontend/**`) e os placeholders de domínio
 - [ ] Definir domínio real de staging/produção (placeholder usado: `xxxx.exemplo.org`)
-- [ ] Criar `Dockerfile` multi-stage do backend (build Maven → runtime JRE)
-- [ ] Criar `Dockerfile` multi-stage do frontend (build Vite → Nginx)
-- [ ] Submodular este repositório de docs como `docs/` nos repositórios de backend e frontend, e adicionar o job de checagem de ponteiro defasado no `build-and-test` dos dois (ver seção "Context" acima)
+- [ ] Criar `Dockerfile` multi-stage do backend (build Maven → runtime JRE), em `backend/Dockerfile`
+- [ ] Criar `Dockerfile` multi-stage do frontend (build Vite → Nginx), em `frontend/Dockerfile`
+- [ ] Criar os workflows de CI em `docs/cicd/workflows/` quando a implementação de código (backend/frontend) for iniciada — não há código executável a proteger antes disso

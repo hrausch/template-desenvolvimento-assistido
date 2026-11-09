@@ -2,7 +2,7 @@
 
 Documentação de casos de uso do Sistema de Gestão de XXXX, derivada dos requisitos funcionais em [`../requisitos/requirements.md`](../requisitos/requirements.md).
 
-Estrutura de cada caso de uso conforme [`uc-template.md`](uc-template.md).
+Estrutura de cada caso de uso conforme [`use-case-template.md`](../templates/use-case-template.md).
 
 ## Índice
 
